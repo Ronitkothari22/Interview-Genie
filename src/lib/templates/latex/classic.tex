@@ -1,0 +1,138 @@
+%-------------------------
+% Classic Resume Template
+% Author: Interview Genie
+% License: MIT
+%------------------------
+
+\documentclass[letterpaper,11pt]{article}
+
+% Required Packages
+\usepackage[empty]{fullpage}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{fontawesome5}
+\usepackage{tabularx}
+\usepackage[T1]{fontenc}
+\usepackage{enumitem}
+\usepackage{geometry}
+
+% Page Layout
+\geometry{left=0.75in,top=0.6in,right=0.75in,bottom=0.6in}
+
+% Colors
+\definecolor{primary}{RGB}{0,0,0}
+\definecolor{secondary}{RGB}{100,100,100}
+\definecolor{accent}{RGB}{0,0,0}
+
+% Links
+\hypersetup{
+    colorlinks=true,
+    linkcolor=primary,
+    filecolor=primary,      
+    urlcolor=primary,
+    pdftitle={Resume - \name}
+}
+
+% Section Formatting
+\titleformat{\section}
+{\Large\scshape\raggedright}
+{}{0em}
+{}[\titlerule]
+
+\titlespacing*{\section}{0pt}{12pt}{8pt}
+
+% Custom Commands
+\newcommand{\resumeSubHeading}[4]{
+  \vspace{2pt}\item
+    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & #2 \\
+      \textit{#3} & \textit{#4} \\
+    \end{tabular*}\vspace{2pt}
+}
+
+\newcommand{\resumeProject}[3]{
+  \vspace{2pt}\item
+    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & #2 \\
+      #3 \\
+    \end{tabular*}\vspace{2pt}
+}
+
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{-2pt}}
+  }
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-4pt}}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=*]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=*,labelsep=5pt]}
+\newcommand{\resumeItemListEnd}{\end{itemize}}
+
+% Document Variables
+\newcommand{\name}{$name$}
+\newcommand{\email}{$email$}
+\newcommand{\phone}{$phone$}
+\newcommand{\linkedin}{$linkedin$}
+\newcommand{\github}{$github$}
+\newcommand{\location}{$location$}
+\newcommand{\website}{$website$}
+
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+    {\Huge \scshape \name} \\ \vspace{3pt}
+    \small
+    \faIcon{envelope} \href{mailto:\email}{\email} $\cdot$
+    \faIcon{phone} \phone $\cdot$
+    \faIcon{map-marker-alt} \location \\ \vspace{1pt}
+    \faIcon{linkedin} \href{https://linkedin.com/in/\linkedin}{\linkedin} $\cdot$
+    \faIcon{github} \href{https://github.com/\github}{\github} $\cdot$
+    \href{\website}{\website}
+\end{center}
+
+%-----------SUMMARY-----------
+\section{Summary}
+$summary$
+
+%-----------EXPERIENCE-----------
+\section{Experience}
+\resumeSubHeadingListStart
+$experience$
+\resumeSubHeadingListEnd
+
+%-----------EDUCATION-----------
+\section{Education}
+\resumeSubHeadingListStart
+$education$
+\resumeSubHeadingListEnd
+
+%-----------PROJECTS-----------
+\section{Projects}
+\resumeSubHeadingListStart
+$projects$
+\resumeSubHeadingListEnd
+
+%-----------SKILLS-----------
+\section{Skills}
+\resumeItemListStart
+$skills$
+\resumeItemListEnd
+
+%-----------CERTIFICATIONS-----------
+\section{Certifications}
+\resumeSubHeadingListStart
+$certifications$
+\resumeSubHeadingListEnd
+
+%-----------ACHIEVEMENTS-----------
+\section{Achievements}
+\resumeSubHeadingListStart
+$achievements$
+\resumeSubHeadingListEnd
+
+\end{document} 

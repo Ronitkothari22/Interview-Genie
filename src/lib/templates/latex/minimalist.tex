@@ -1,0 +1,117 @@
+%-------------------------
+% Minimalist Resume Template
+% Author: Interview Genie
+% License: MIT
+%------------------------
+
+\documentclass[a4paper,10pt]{article}
+
+% Required Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{fontawesome5}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+
+% Page Layout
+\geometry{
+    left=1.5cm,
+    right=1.5cm,
+    top=1.5cm,
+    bottom=1.5cm
+}
+
+% Colors
+\definecolor{primary}{RGB}{50,50,50}
+\definecolor{secondary}{RGB}{100,100,100}
+
+% Links
+\hypersetup{
+    colorlinks=true,
+    urlcolor=primary,
+    linkcolor=primary
+}
+
+% Section Formatting
+\titleformat{\section}
+{\normalfont\Large\bfseries\color{primary}}
+{}{0em}{}[\vspace{-0.8em}]
+
+\titlespacing*{\section}{0pt}{0.7em}{0.5em}
+
+% Custom Commands
+\newcommand{\entry}[4]{
+    {\textbf{#1}} \hfill {#2} \\
+    {\textit{#3}} \hfill {\textit{#4}} \\[0.2em]
+}
+
+\newcommand{\simpleentry}[2]{
+    {\textbf{#1}} \hfill {#2} \\[0.2em]
+}
+
+\newcommand{\skill}[2]{
+    \textbf{#1}: #2 \\
+}
+
+% Document Variables
+\newcommand{\name}{$name$}
+\newcommand{\email}{$email$}
+\newcommand{\phone}{$phone$}
+\newcommand{\linkedin}{$linkedin$}
+\newcommand{\github}{$github$}
+\newcommand{\location}{$location$}
+\newcommand{\website}{$website$}
+
+\begin{document}
+\pagestyle{empty}
+
+%----------HEADING----------
+{\LARGE\textbf{\name}}
+
+\vspace{0.3em}
+{\small
+\faIcon{envelope} \href{mailto:\email}{\email} \textbullet{} 
+\faIcon{phone} \phone \textbullet{} 
+\faIcon{map-marker-alt} \location
+
+\faIcon{linkedin} \href{https://linkedin.com/in/\linkedin}{\linkedin} \textbullet{} 
+\faIcon{github} \href{https://github.com/\github}{\github} \textbullet{} 
+\href{\website}{\website}
+}
+
+\vspace{1em}
+
+%-----------SUMMARY-----------
+\section*{Summary}
+$summary$
+
+%-----------EXPERIENCE-----------
+\section*{Experience}
+$experience$
+
+%-----------EDUCATION-----------
+\section*{Education}
+$education$
+
+%-----------PROJECTS-----------
+\section*{Projects}
+$projects$
+
+%-----------SKILLS-----------
+\section*{Skills}
+$skills$
+
+%-----------CERTIFICATIONS-----------
+\section*{Certifications}
+$certifications$
+
+%-----------ACHIEVEMENTS-----------
+\section*{Achievements}
+$achievements$
+
+\end{document} 
