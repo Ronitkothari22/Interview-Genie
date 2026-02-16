@@ -1,10 +1,22 @@
 import { Redis } from "@upstash/redis";
 import { env } from "@/env";
 
-export const redis = new Redis({
-  url: env.UPSTASH_REDIS_REST_URL,
-  token: env.UPSTASH_REDIS_REST_TOKEN,
-});
+const hasRedis =
+  env.UPSTASH_REDIS_REST_URL &&
+  env.UPSTASH_REDIS_REST_TOKEN;
+
+// Use no-op when Upstash is not configured (e.g. local dev without Redis)
+export const redis = hasRedis
+  ? new Redis({
+      url: env.UPSTASH_REDIS_REST_URL,
+      token: env.UPSTASH_REDIS_REST_TOKEN,
+    })
+  : ({
+      get: async () => null,
+      set: async () => "OK",
+      del: async () => 0,
+      keys: async () => [],
+    } as unknown as Redis);
 
 // Cache TTL constants
 export const CACHE_TTL = {

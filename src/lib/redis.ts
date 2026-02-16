@@ -1,11 +1,44 @@
 import { Redis } from "@upstash/redis";
 import { env } from "@/env";
 
-// Initialize Redis client
-export const redis = new Redis({
-  url: env.UPSTASH_REDIS_REST_URL,
-  token: env.UPSTASH_REDIS_REST_TOKEN,
-});
+// In-memory fallback for rate limits when Upstash is not configured (e.g. local dev)
+const rateLimitStore = new Map<string, { count: number; expiresAt: number }>();
+
+function createNoopRedis(): Redis {
+  return {
+    get: async () => null,
+    set: async () => "OK",
+    del: async () => 0,
+    incr: async (key: string) => {
+      const entry = rateLimitStore.get(key);
+      const now = Date.now();
+      if (!entry || now > entry.expiresAt) {
+        rateLimitStore.set(key, { count: 1, expiresAt: now + 300_000 });
+        return 1;
+      }
+      entry.count++;
+      return entry.count;
+    },
+    expire: async (key: string, seconds: number) => {
+      const entry = rateLimitStore.get(key);
+      if (entry) entry.expiresAt = Date.now() + seconds * 1000;
+      return "OK";
+    },
+    keys: async () => [],
+  } as unknown as Redis;
+}
+
+const hasRedis =
+  env.UPSTASH_REDIS_REST_URL &&
+  env.UPSTASH_REDIS_REST_TOKEN;
+
+// Initialize Redis client; use in-memory fallback when Upstash is not configured
+export const redis = hasRedis
+  ? new Redis({
+      url: env.UPSTASH_REDIS_REST_URL,
+      token: env.UPSTASH_REDIS_REST_TOKEN,
+    })
+  : createNoopRedis();
 
 // Cache key prefixes
 export const CACHE_KEYS = {
