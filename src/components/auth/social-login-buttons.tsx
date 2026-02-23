@@ -23,7 +23,7 @@ export function SocialLoginButtons({
   const handleGoogleLogin = async () => {
     try {
       setIsGoogleLoading(true);
-      const result = await signIn("google", { callbackUrl, redirect: false });
+      const result = await signIn("google", { callbackUrl });
       if (result?.error) {
         toast.error("Failed to sign in with Google", {
           description: "Please try again later",
@@ -42,7 +42,7 @@ export function SocialLoginButtons({
   const handleGitHubLogin = async () => {
     try {
       setIsGitHubLoading(true);
-      const result = await signIn("github", { callbackUrl, redirect: false });
+      const result = await signIn("github", { callbackUrl });
       if (result?.error) {
         toast.error("Failed to sign in with GitHub", {
           description: "Please ensure you have a verified email on GitHub",
