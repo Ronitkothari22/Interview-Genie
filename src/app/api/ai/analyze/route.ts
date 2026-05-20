@@ -3,8 +3,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "@/env";
 import type { ResumeAnalysisResult } from "@/lib/gemini";
 
-// Initialize Gemini on the server side
-const genAI = new GoogleGenerativeAI(env.GOOGLE_GEMINI_API);
+function getGeminiClient() {
+  if (!env.GOOGLE_GEMINI_API) {
+    throw new Error("GOOGLE_GEMINI_API is not configured");
+  }
+  return new GoogleGenerativeAI(env.GOOGLE_GEMINI_API);
+}
 
 const ATS_ANALYSIS_PROMPT = `
 Analyze this resume with balanced but strict scoring criteria. Provide constructive feedback while acknowledging strengths.
@@ -121,6 +125,7 @@ Please analyze the resume and provide a detailed response in the following JSON 
 
 export async function POST(req: Request) {
   try {
+    const genAI = getGeminiClient();
     const { resumeData } = (await req.json()) as { resumeData: string };
 
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });

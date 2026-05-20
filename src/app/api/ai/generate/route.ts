@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "@/env";
 
-// Initialize Gemini on the server side
-const genAI = new GoogleGenerativeAI(env.GOOGLE_GEMINI_API);
-const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+function getGeminiModel() {
+  if (!env.GOOGLE_GEMINI_API) {
+    throw new Error("GOOGLE_GEMINI_API is not configured");
+  }
+  const genAI = new GoogleGenerativeAI(env.GOOGLE_GEMINI_API);
+  return genAI.getGenerativeModel({ model: "gemini-pro" });
+}
 
 const RESUME_EXPERT_PROMPT = `You are an expert resume writer. Enhance the given text with proper grammar and professional tone. 
 Keep the original meaning but make it more impactful.
@@ -45,6 +49,7 @@ function getPromptForSection(
 
 export async function POST(req: Request) {
   try {
+    const model = getGeminiModel();
     const { section, context } = await req.json();
 
     const prompt = getPromptForSection(section, context);

@@ -5,9 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "@/env";
 
-// Initialize Gemini on the server side
-const genAI = new GoogleGenerativeAI(env.GOOGLE_GEMINI_API);
-const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+function getGeminiModel() {
+  if (!env.GOOGLE_GEMINI_API) {
+    throw new Error("GOOGLE_GEMINI_API is not configured");
+  }
+  const genAI = new GoogleGenerativeAI(env.GOOGLE_GEMINI_API);
+  return genAI.getGenerativeModel({ model: "gemini-pro" });
+}
 
 const ATS_ANALYSIS_PROMPT = `You are an ATS resume analyzer. Analyze the given resume and provide a structured JSON response following this exact format:
 
@@ -161,6 +165,7 @@ interface AchievementData {
 
 async function analyzeResumeWithGemini(resumeData: string) {
   try {
+    const model = getGeminiModel();
     console.log("Analyzing resume with Gemini...");
     console.log("Resume data:", JSON.stringify(resumeData, null, 2));
 
