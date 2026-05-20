@@ -2,7 +2,6 @@ import NextAuth from "next-auth";
 import { CustomPrismaAdapter } from "@/server/auth/adapter";
 import { db } from "@/server/db";
 import GoogleProvider from "next-auth/providers/google";
-import GitHubProvider from "next-auth/providers/github";
 import { credentialsProvider } from "@/server/auth/credentials";
 import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "next-auth/jwt";
@@ -10,8 +9,7 @@ import type { User } from "next-auth";
 import type { AdapterSession } from "next-auth/adapters";
 import type { Session } from "next-auth";
 import { env } from "@/env";
-import { redis } from "@/server/redis";
-import { getUser, invalidateUserCache, updateUser } from "@/lib/user-cache";
+import { getUser, updateUser } from "@/lib/user-cache";
 
 // Extend the User type to include our custom fields
 interface CustomUser extends User {
@@ -67,35 +65,9 @@ export const authConfig = {
         };
       },
     }),
-    GitHubProvider({
-      clientId: env.AUTH_GITHUB_ID,
-      clientSecret: env.AUTH_GITHUB_SECRET,
-      authorization: {
-        params: {
-          scope: "read:user user:email",
-        },
-      },
-      profile(profile) {
-        return {
-          id: profile.id.toString(),
-          name: profile.name ?? profile.login,
-          email: profile.email,
-          image: profile.avatar_url,
-          emailVerified: null,
-          credits: 100,
-          subscriptionStatus: "free",
-          isVerified: true,
-        };
-      },
-    }),
   ],
   callbacks: {
     async jwt({ token, user, trigger, session }) {
-      // Add cache invalidation on token updates
-      if (token?.jti && (trigger === "signIn" || trigger === "update")) {
-        await redis.del(`session:${token.jti}`);
-      }
-
       // If this is a sign in or we have an email in the token
       if ((trigger === "signIn" && user) || token?.email) {
         try {
@@ -103,15 +75,16 @@ export const authConfig = {
           const email = user?.email ?? token.email;
           if (!email) {
             console.warn("No email found in token or user");
-            return null;
+            return token as CustomJWT;
           }
 
           const dbUser = await getUser({ email });
 
-          // If user doesn't exist in the database anymore, invalidate the token
+          // If user doesn't exist in the database yet (e.g. race on first OAuth sign-in),
+          // fall back to returning the token as-is rather than killing the session.
           if (!dbUser) {
-            console.warn(`User not found in database: ${email}`);
-            return null;
+            console.warn(`User not found in database: ${email}. Returning bare token.`);
+            return token as CustomJWT;
           }
 
           // Update token with latest user data
@@ -124,12 +97,13 @@ export const authConfig = {
           token.isVerified = dbUser.isVerified;
         } catch (error) {
           console.error("Error fetching user data:", error);
-          return null;
+          // Don't return null — that causes a Configuration error in NextAuth.
+          // Fall back to the existing token so the session isn't hard-killed.
+          return token as CustomJWT;
         }
       }
 
       if (trigger === "update" && session) {
-        await redis.del(`session:${token.jti}`);
         const updatedToken = {
           ...token,
           ...session.user,
@@ -220,9 +194,7 @@ export const authConfig = {
         | { session: void | AdapterSession | null | undefined }
         | { token: JWT | null },
     ) {
-      if ("token" in message && message.token?.jti) {
-        await redis.del(`session:${message.token.jti}`);
-      }
+      void message;
     },
   },
   secret: env.NEXTAUTH_SECRET,

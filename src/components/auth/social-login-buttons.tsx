@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { toast } from "sonner";
-import { Loader2, Github } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface SocialLoginButtonsProps {
@@ -18,7 +18,6 @@ export function SocialLoginButtons({
   isLoading: externalLoading = false,
 }: SocialLoginButtonsProps) {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [isGitHubLoading, setIsGitHubLoading] = useState(false);
 
   const handleGoogleLogin = async () => {
     try {
@@ -39,27 +38,7 @@ export function SocialLoginButtons({
     }
   };
 
-  const handleGitHubLogin = async () => {
-    try {
-      setIsGitHubLoading(true);
-      const result = await signIn("github", { callbackUrl });
-      if (result?.error) {
-        toast.error("Failed to sign in with GitHub", {
-          description: "Please ensure you have a verified email on GitHub",
-        });
-      }
-    } catch (error) {
-      console.error("GitHub login error:", error);
-      toast.error("Failed to sign in with GitHub", {
-        description: "Please try again later",
-      });
-    } finally {
-      setIsGitHubLoading(false);
-    }
-  };
-
-  const isButtonsDisabled =
-    externalLoading || isGoogleLoading || isGitHubLoading;
+  const isButtonsDisabled = externalLoading || isGoogleLoading;
 
   return (
     <motion.div
@@ -88,38 +67,6 @@ export function SocialLoginButtons({
             Continue with Google
           </motion.div>
           {isGoogleLoading && (
-            <motion.div
-              className="absolute inset-0 flex items-center justify-center"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <Loader2 className="h-4 w-4 animate-spin" />
-            </motion.div>
-          )}
-        </Button>
-      </motion.div>
-
-      <motion.div
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        transition={{ duration: 0.1 }}
-      >
-        <Button
-          variant="social"
-          disabled={isButtonsDisabled}
-          onClick={handleGitHubLogin}
-          className="relative h-11 w-full font-medium"
-        >
-          <motion.div
-            className="flex w-full items-center justify-center"
-            initial={false}
-            animate={isGitHubLoading ? { opacity: 0 } : { opacity: 1 }}
-          >
-            <Github className="mr-2 h-4 w-4" />
-            Continue with GitHub
-          </motion.div>
-          {isGitHubLoading && (
             <motion.div
               className="absolute inset-0 flex items-center justify-center"
               initial={{ opacity: 0 }}
