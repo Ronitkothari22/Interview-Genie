@@ -10,6 +10,10 @@
 
 set -e
 
+# Work from the backend/ directory regardless of where the script is invoked from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 echo "Checking database setup (no Docker)..."
 
 # Load DATABASE_URL from .env if present

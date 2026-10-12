@@ -4,7 +4,7 @@
 > independent projects at the repo root — `backend/` (TypeScript + Node.js +
 > Express) and `frontend/` (Next.js) — without breaking any existing feature.
 >
-> Status: PLANNED (not started)
+> Status: IN PROGRESS — **Phase 2 complete** (2026-10-12)
 > Owner: _assign_
 > Created: 2026-10-12
 
@@ -253,15 +253,68 @@ Add a short note at the top of each file: `// SHARED — keep in sync with <othe
 
 ## 8. Phased Execution
 
-### Phase 1 — Scaffold `backend/`
-- `npm init`, add Express, TypeScript, `tsx`/`ts-node`, `cors`, `cookie-parser`, `zod`, `bcryptjs`, `@prisma/client`, `prisma`, `nodemailer`, `@google/generative-ai`, `@react-pdf/renderer`, `react` (for React-PDF), `pg`.
-- `tsconfig.json` with `jsx: react-jsx` (needed for React-PDF templates), path alias `@/*`.
-- Create `src/index.ts`, `src/app.ts`, base middleware (json, cookie, cors, error handler).
-- Add scripts: `dev`, `build`, `start`, `typecheck`, `lint`, `db:*`.
+### Phase 1 — Scaffold `backend/` — COMPLETED (2026-10-12)
+- [x] `npm init`, add Express, TypeScript, `tsx`/`ts-node`, `cors`, `cookie-parser`, `zod`, `bcryptjs`, `@prisma/client`, `prisma`, `nodemailer`, `@google/generative-ai`, `@react-pdf/renderer`, `react` (for React-PDF), `pg`.
+- [x] `tsconfig.json` with `jsx: react-jsx` (needed for React-PDF templates), path alias `@/*`.
+- [x] Create `src/index.ts`, `src/app.ts`, base middleware (json, cookie, cors, error handler).
+- [x] Add scripts: `dev`, `build`, `start`, `typecheck`, `lint`, `db:*`.
 
-### Phase 2 — Prisma + DB scripts
-- Move `prisma/**`, `scripts/ensure-database.ts`, `start-database.sh`.
-- Unify the three Prisma singletons into `src/config/prisma.ts`.
+**What was created:**
+
+| Path | Purpose |
+|---|---|
+| `backend/package.json` | Deps + scripts (`dev`, `build`, `start`, `typecheck`, `lint`, `format`, `db:*`) |
+| `backend/tsconfig.json` | `jsx: react-jsx`, `@/*` alias, NodeNext ESM, `outDir: dist` |
+| `backend/.eslintrc.cjs`, `backend/prettier.config.cjs` | Lint/format config |
+| `backend/.gitignore`, `backend/.env.example` | Ignores + env template (§6 backend vars) |
+| `backend/src/config/env.ts` | zod-validated env loader (loads `.env` via `process.loadEnvFile`) |
+| `backend/src/middleware/cors.ts` | CORS with `FRONTEND_URL` + `credentials: true` |
+| `backend/src/middleware/error.ts` | `HttpError`, `notFoundHandler`, `errorHandler` |
+| `backend/src/app.ts` | Express app: cors → json/urlencoded → cookie-parser → routes → 404 → error |
+| `backend/src/index.ts` | Bootstrap + `listen` + graceful SIGINT/SIGTERM shutdown |
+| `backend/src/routes/health.ts` | Base `GET /api/health` (DB/Redis checks deferred to Phase 5) |
+
+**Verification (all passed):**
+- `npm run typecheck` — clean
+- `npm run lint` — clean
+- `npm run build` — emits `dist/` with aliases rewritten by `tsc-alias`
+- `npm run dev` (tsx) and `node dist/index.js` both boot; `GET /api/health` → 200, `GET /` → 200, unknown route → 404 JSON, graceful shutdown works.
+
+**Notes / deviations:**
+- Backend uses ESM (`"type": "module"`, `module: NodeNext`) + `tsc-alias` to emit a runnable `dist/`.
+- Added helpers beyond the literal list: `tsc-alias`, `eslint` + TS plugins, `prettier`, `@types/*`. `ts-node` not installed — `tsx` covers dev + script running.
+- `src/config/env.ts` and the base `health` route were pulled forward from Phases 6/5 to make the scaffold bootable; full DB/Redis health checks still pending.
+
+
+### Phase 2 — Prisma + DB scripts — COMPLETED (2026-10-12)
+- [x] Move `prisma/**`, `scripts/ensure-database.ts`, `start-database.sh`.
+- [x] Unify the three Prisma singletons into `src/config/prisma.ts`.
+
+**What was done:**
+
+| Path | Purpose |
+|---|---|
+| `backend/prisma/schema.prisma` | Moved from root `prisma/` (unchanged) |
+| `backend/prisma/migrations/**` | 15 migrations + `migration_lock.toml` moved verbatim |
+| `backend/scripts/ensure-database.ts` | Moved from root `scripts/` (unchanged; resolves `.env` → `backend/`) |
+| `backend/start-database.sh` | Moved from root; now `cd`s to its own dir via `BASH_SOURCE` before `npm run db:ensure` |
+| `backend/src/config/prisma.ts` | Unified singleton replacing `src/lib/db.ts`, `src/lib/prisma.ts`, `src/server/db.ts` — globalThis caching, dev query logging, explicit `datasourceUrl` from env; exports `prisma` (+ `db` alias) |
+| `backend/tsconfig.json` | `rootDir: "."`, include `scripts/**/*.ts` (so scripts are typechecked); emit layout now `dist/src/*` |
+| `backend/package.json` | `start` → `node dist/src/index.js` |
+| `backend/.env` | Local dev env (gitignored) so Prisma CLI + backend resolve `DATABASE_URL` |
+
+**Verification (all passed):**
+- `npx prisma validate` — schema valid
+- `npm run db:generate` — client generated in `backend/`
+- `npm run typecheck` + `npm run lint` — clean
+- `npm run build` — clean; emits `dist/` incl. `dist/scripts/ensure-database.js`
+- `npm run start` — boots; `GET /api/health` → 200
+
+**Notes / deviations:**
+- Canonical export is `prisma` with a `db` alias, covering both names used by monolith code (Phase 4 ports can use either).
+- The old root singletons (`src/lib/db.ts`, `src/lib/prisma.ts`, `src/server/db.ts`) are intentionally kept — the monolith still runs until Phase 8/12.
+- Root `package.json` `postinstall: prisma generate` will fail on a fresh root `npm install` now that `prisma/` moved. Expected; resolved when Prisma is stripped from the frontend (Phase 8/12).
+- `start-database.sh` and `db:ensure` are now fully contained in `backend/`; root copies removed.
 
 ### Phase 3 — Backend auth
 - Implement JWT issue/verify util + auth middleware.
