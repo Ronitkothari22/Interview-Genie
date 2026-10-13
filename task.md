@@ -4,7 +4,7 @@
 > independent projects at the repo root — `backend/` (TypeScript + Node.js +
 > Express) and `frontend/` (Next.js) — without breaking any existing feature.
 >
-> Status: IN PROGRESS — **Phase 3 complete** (2026-10-13)
+> Status: IN PROGRESS — **Phase 4 complete** (2026-10-13)
 > Owner: _assign_
 > Created: 2026-10-12
 
@@ -376,9 +376,65 @@ Add a short note at the top of each file: `// SHARED — keep in sync with <othe
 - `authMiddleware` / `optionalAuthMiddleware` are implemented but not yet attached to any route — Phase 4 wires them onto ported routers.
 - Email sending is skipped with a warning when `EMAIL_USER`/`EMAIL_PASS` are unset (dev), matching the monolith's best-effort behavior.
 
-### Phase 4 — Port route handlers
-- Convert all 20 usable routes to Express routers (§4 mapping).
-- Wire routers in `app.ts`.
+### Phase 4 — Port route handlers — COMPLETED (2026-10-13)
+- [x] Convert all 20 usable routes to Express routers (§4 mapping).
+- [x] Wire routers in `app.ts`.
+
+**What was created:**
+
+| Path | Purpose |
+|---|---|
+| `backend/src/routes/statistics.ts` | `GET /api/statistics` (ATS/interview/practice/credit aggregates) |
+| `backend/src/routes/practice.ts` | `POST /start`, `/ping`, `/end` (auth-gated; upserts `PracticeStats`) |
+| `backend/src/routes/resumes.ts` | Collection + sub-resource CRUD, AI generate, preview, template preview, PDF download |
+| `backend/src/routes/resume-analysis.ts` | `GET` (list stored analyses) + `POST` (forward multipart to ATS, persist) |
+| `backend/src/routes/ai.ts` | `POST /api/ai/analyze`, `POST /api/ai/generate` (Gemini) |
+| `backend/src/routes/health.ts` | Extended with DB + Redis checks and `testRedisFeatures` (was static) |
+| `backend/src/services/gemini.ts` | `getGeminiModel()` wrapper (throws when `GOOGLE_GEMINI_API` unset) |
+| `backend/src/services/preview.ts` | Template preview sample data + `generateTemplatePreview` |
+| `backend/src/templates/pdf/modern.tsx` | React-PDF `ModernPDFTemplate` moved from `src/components/resume/pdf-templates` |
+| `backend/src/shared/types/resume.ts` | `ResumeData`, `TemplateType`, external-ATS `ResumeAnalysisResult` (§7) |
+| `backend/src/shared/types/api.ts` | `ApiError` (mirrored shared type) |
+| `backend/src/lib/redis.ts` | Added `testRedisFeatures()` for `/api/health` |
+| `backend/src/app.ts` | Mounted `statistics`, `practice`, `resumes`, `resume-analysis`, `ai` routers |
+
+**Mounted endpoints (20):**
+
+| Path | Methods |
+|---|---|
+| `/api/health` | GET |
+| `/api/statistics` | GET |
+| `/api/practice/start` `/ping` `/end` | POST |
+| `/api/resumes` | POST / GET / DELETE / OPTIONS |
+| `/api/resumes/generate` | POST |
+| `/api/resumes/preview` | POST |
+| `/api/resumes/templates/preview` | GET |
+| `/api/resumes/:id/download` | GET |
+| `/api/resumes/:id` | GET / PATCH / DELETE |
+| `/api/resume-analysis` | GET / POST |
+| `/api/ai/analyze` `/api/ai/generate` | POST |
+
+**Dropped:** `/api/trpc/[trpc]` (dead tRPC) and `/api/cron/weekly-reset` (0-byte handler).
+
+**Verification (all passed against a throwaway Postgres 16 container + a local mock ATS):**
+- `npm run typecheck` + `npm run lint` + `npm run build` — clean.
+- `GET /api/health` → 200 with `database: healthy` + `redis: healthy` (incl. feature checks).
+- Full auth round-trip still works: signup → OTP (read from DB) → verify → login → session.
+- Resumes: create → list → get (full include) → PATCH `personal`/`skills` → invalid section 400 → invalid schema 400 (zod errors) → PDF download 200 `application/pdf` (valid 1-page PDF) → delete by path and by query param → list empty.
+- Statistics: returns expected aggregate shape; interview count/practice minutes update after a completed session.
+- Practice: start → ping (`{success:true}`) → end (duration + `PracticeStats` upsert) all work.
+- Resume analysis: `GET` returns stored analyses; `POST` forwards the raw multipart body to the ATS (verified via mock that `content-type` boundary + file + fields arrive intact) and persists the result (`totalScore`, `fileUrl`, `keywordMatchRate`).
+- Preview: `POST /api/resumes/preview` → sample JSON; `GET /api/resumes/templates/preview` → 200.
+- Unauthenticated access to protected routes → 401; unknown route → 404 JSON; CORS preflight → 204 with allow-origin/credentials.
+
+**Notes / deviations:**
+- `/api/resumes/preview` and `/api/resumes/templates/preview` are intentionally **unauthenticated** (monolith parity). `authMiddleware` is applied per-route rather than to the whole `resumes` router.
+- `resume-analysis` POST forwards the **raw** multipart body (`express.raw({ type: "multipart/form-data" })`) with the original `Content-Type` header instead of re-encoding `request.formData()`. This preserves the boundary/fields exactly and avoids adding `multer`.
+- `/api/resumes/templates/preview` keeps the monolith's behaviour verbatim (it serialises preview JSON into a buffer labelled `application/pdf`). The frontend renders previews client-side and never calls it; documented here as a pre-existing bug.
+- `/api/ai/analyze` preserves the monolith's behaviour: it declared an ATS prompt but called `generateContent(resumeData)` directly. The unused prompt was dropped rather than silently applied.
+- `resumes/generate` preserves two pre-existing quirks: it derives `title` from `data.personalInfo` before validating the body (so an empty body yields 500), and it surfaces raw Prisma errors. Behaviour matches the monolith.
+- Some Phase 5/6 artefacts were pulled forward because routes depend on them: `services/gemini.ts`, `services/preview.ts`, `templates/pdf/modern.tsx`, and the shared resume/api types. Phase 5/6 still cover `api-cache`, `batch-queries`, remaining `templates/{latex,email}`, and the full shared validations set.
+- AI routes could not be exercised end-to-end here (`GOOGLE_GEMINI_API` unset); they correctly 500 with the same messages as the monolith when the key is absent.
 
 ### Phase 5 — Port services/lib
 - `email.ts` (nodemailer), `gemini.ts`, `password-reset.ts`, `user-cache`, `auth-cache`, `api-cache`, `batch-queries`, `rate-limit`.
@@ -432,16 +488,16 @@ Add a short note at the top of each file: `// SHARED — keep in sync with <othe
 - [x] Signup → OTP email → verify OTP → login → session → logout.
 - [ ] Google OAuth full round-trip; user + account upserted. _(start + state validation verified; full round-trip needs real Google creds)_
 - [x] Forgot password → reset link → reset (HIBP breach check works).
-- [ ] Protected endpoint rejects missing/invalid JWT; accepts valid cookie. _(middleware built; no protected route until Phase 4)_
+- [x] Protected endpoint rejects missing/invalid JWT; accepts valid cookie. _(verified Phase 4 across resumes/statistics/practice/resume-analysis)_
 
 ### Features
-- [ ] Resumes: list, create, edit, per-section PATCH, delete.
-- [ ] Resume AI generate; ATS analysis via external service.
-- [ ] PDF download renders correctly (React-PDF moved to backend).
-- [ ] Template preview endpoints.
-- [ ] Practice start/ping/end; statistics aggregation.
-- [ ] AI analyze/generate.
-- [ ] Cron route (if kept).
+- [x] Resumes: list, create, edit, per-section PATCH, delete.
+- [x] Resume AI generate _(routes ported; live call needs `GOOGLE_GEMINI_API`)_; ATS analysis via external service _(forwarding + persistence verified against a mock ATS)_.
+- [x] PDF download renders correctly (React-PDF moved to backend).
+- [x] Template preview endpoints.
+- [x] Practice start/ping/end; statistics aggregation.
+- [ ] AI analyze/generate. _(routes ported; not exercised — `GOOGLE_GEMINI_API` unset)_
+- [x] Cron route — **dropped** (empty in monolith; see §11).
 
 ### Frontend
 - [ ] `npm run build` + `npm run lint` + `npm run typecheck` pass.

@@ -3,8 +3,13 @@ import express, { type Express } from "express";
 
 import { corsMiddleware } from "@/middleware/cors.js";
 import { errorHandler, notFoundHandler } from "@/middleware/error.js";
+import { aiRouter } from "@/routes/ai.js";
 import { authRouter } from "@/routes/auth.js";
 import { healthRouter } from "@/routes/health.js";
+import { practiceRouter } from "@/routes/practice.js";
+import { resumeAnalysisRouter } from "@/routes/resume-analysis.js";
+import { resumesRouter } from "@/routes/resumes.js";
+import { statisticsRouter } from "@/routes/statistics.js";
 
 export function createApp(): Express {
   const app = express();
@@ -23,6 +28,11 @@ export function createApp(): Express {
 
   app.use("/api/health", healthRouter);
   app.use("/api/auth", authRouter);
+  app.use("/api/statistics", statisticsRouter);
+  app.use("/api/practice", practiceRouter);
+  app.use("/api/resumes", resumesRouter);
+  app.use("/api/resume-analysis", resumeAnalysisRouter);
+  app.use("/api/ai", aiRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

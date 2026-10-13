@@ -208,6 +208,53 @@ export async function checkRedisConnection(): Promise<{
   }
 }
 
+/**
+ * Exercise the cache + rate-limit primitives so `/api/health` can report which
+ * Redis-backed features are working. Ported from the monolith's `lib/redis.ts`.
+ */
+export async function testRedisFeatures(): Promise<{
+  ok: boolean;
+  results: {
+    notifications: { ok: boolean };
+    caching: { ok: boolean };
+    rateLimiting: { ok: boolean };
+  };
+}> {
+  const results = {
+    notifications: { ok: true },
+    caching: { ok: true },
+    rateLimiting: { ok: true },
+  };
+
+  try {
+    const testKey = formatCacheKey(CACHE_KEYS.HEALTH, "feature-test");
+    await redis.set(testKey, { test: true });
+    const cached = await redis.get(testKey);
+    await redis.del(testKey);
+
+    if (!cached) {
+      results.caching.ok = false;
+    }
+
+    const rateKey = formatCacheKey(CACHE_KEYS.RATE_LIMIT, "feature-test");
+    await rateLimiting.increment(rateKey, 60);
+    const count = await rateLimiting.get(rateKey);
+    await rateLimiting.reset(rateKey);
+
+    if (count !== 1) {
+      results.rateLimiting.ok = false;
+    }
+  } catch (error) {
+    console.error("Redis feature test error:", error);
+    return { ok: false, results };
+  }
+
+  return {
+    ok: Object.values(results).every((result) => result.ok),
+    results,
+  };
+}
+
 export const sessionCache = {
   async set(key: string, session: unknown) {
     await redis.set(key, session, { ex: TTL.LONG });
