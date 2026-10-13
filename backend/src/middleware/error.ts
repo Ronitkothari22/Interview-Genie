@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { ZodError } from "zod";
 
 /** Error carrying an HTTP status code for the error handler to surface. */
 export class HttpError extends Error {
@@ -28,6 +29,11 @@ export function errorHandler(
   res: Response,
   _next: NextFunction,
 ): void {
+  if (err instanceof ZodError) {
+    res.status(400).json({ error: "Invalid input data", details: err.errors });
+    return;
+  }
+
   const status = err instanceof HttpError ? err.status : 500;
   const message = err instanceof Error ? err.message : "Internal Server Error";
 

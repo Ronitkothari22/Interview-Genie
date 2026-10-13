@@ -3,6 +3,7 @@ import express, { type Express } from "express";
 
 import { corsMiddleware } from "@/middleware/cors.js";
 import { errorHandler, notFoundHandler } from "@/middleware/error.js";
+import { authRouter } from "@/routes/auth.js";
 import { healthRouter } from "@/routes/health.js";
 
 export function createApp(): Express {
@@ -21,6 +22,7 @@ export function createApp(): Express {
   });
 
   app.use("/api/health", healthRouter);
+  app.use("/api/auth", authRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

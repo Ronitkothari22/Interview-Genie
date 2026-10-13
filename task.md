@@ -4,7 +4,7 @@
 > independent projects at the repo root — `backend/` (TypeScript + Node.js +
 > Express) and `frontend/` (Next.js) — without breaking any existing feature.
 >
-> Status: IN PROGRESS — **Phase 2 complete** (2026-10-12)
+> Status: IN PROGRESS — **Phase 3 complete** (2026-10-13)
 > Owner: _assign_
 > Created: 2026-10-12
 
@@ -316,10 +316,65 @@ Add a short note at the top of each file: `// SHARED — keep in sync with <othe
 - Root `package.json` `postinstall: prisma generate` will fail on a fresh root `npm install` now that `prisma/` moved. Expected; resolved when Prisma is stripped from the frontend (Phase 8/12).
 - `start-database.sh` and `db:ensure` are now fully contained in `backend/`; root copies removed.
 
-### Phase 3 — Backend auth
-- Implement JWT issue/verify util + auth middleware.
-- Implement signup, login, logout, session, Google OAuth, OTP, forgot/reset-password.
-- Configure CORS (credentials) + cookie options.
+### Phase 3 — Backend auth — COMPLETED (2026-10-13)
+- [x] Implement JWT issue/verify util + auth middleware.
+- [x] Implement signup, login, logout, session, Google OAuth, OTP, forgot/reset-password.
+- [x] Configure CORS (credentials) + cookie options.
+
+**What was created:**
+
+| Path | Purpose |
+|---|---|
+| `backend/src/lib/jwt.ts` | `issueSessionToken` / `verifySessionToken` (jose, HS256, 30-day expiry) |
+| `backend/src/config/cookies.ts` | Session cookie name (`ig_session`), OAuth state cookie, options (`httpOnly`, `sameSite=lax`, `secure` in prod, optional `COOKIE_DOMAIN`) |
+| `backend/src/lib/redis.ts` | In-memory Redis-compatible store + `cache`/`sessionCache`/`rateLimiting`/`checkRedisConnection` (replaces `server/redis.ts` + `lib/redis.ts`) |
+| `backend/src/lib/auth-cache.ts` | Session/user cache + auth rate limiting (next-auth `User` → shared `SessionUser`) |
+| `backend/src/lib/rate-limit.ts` | Fixed-window limiter + `getClientIp` + `applyRateLimit` (Express `Request`/`Response`) |
+| `backend/src/lib/utils.ts` | `generateOTP`, `generateToken`, `sha256`, `sha1` |
+| `backend/src/lib/user-cache.ts` | Cached user lookups/updates against `config/prisma.ts` |
+| `backend/src/services/email.ts` | nodemailer transport + `sendEmail` (gracefully skips when SMTP creds absent) |
+| `backend/src/services/password-reset.ts` | Generate/validate/delete reset tokens (node:crypto) |
+| `backend/src/templates/email/{otp-verification,welcome,password-reset}.ts` | Email HTML (welcome now uses `FRONTEND_URL`) |
+| `backend/src/shared/types/session.ts` | `SessionUser` + `Session` (mirror of frontend) |
+| `backend/src/shared/validations/auth.ts` | zod schemas: signup/login/verifyOTP/resendOTP/forgot/reset |
+| `backend/src/middleware/auth.ts` | `authenticateRequest`, `authMiddleware` (401), `optionalAuthMiddleware`; augments `req.user` |
+| `backend/src/routes/auth.ts` | All 10 auth endpoints (below), mounted at `/api/auth` |
+| `backend/src/middleware/error.ts` | Added `ZodError` → 400 JSON handling |
+| `backend/src/config/env.ts` | Added optional `BACKEND_URL` + `COOKIE_DOMAIN` |
+| `backend/package.json` | Added `jose` dependency |
+
+**Endpoints:**
+
+| Endpoint | Method |
+|---|---|
+| `/api/auth/signup` | POST |
+| `/api/auth/login` | POST |
+| `/api/auth/logout` | POST |
+| `/api/auth/session` | GET |
+| `/api/auth/google` | GET |
+| `/api/auth/google/callback` | GET |
+| `/api/auth/verify-otp` | POST |
+| `/api/auth/verify/resend` | POST |
+| `/api/auth/forgot-password` | POST |
+| `/api/auth/reset-password` | POST |
+
+**Verification (all passed against a throwaway Postgres 16 container):**
+- `npm run typecheck` + `npm run lint` + `npm run build` — clean.
+- Signup → duplicate signup 400 → invalid body 400 → OTP (read from DB) verified → login blocked before verification (403) → login after verification 200 + httpOnly `ig_session` cookie → `GET /session` returns user → logout clears cookie → `/session` null.
+- Rate limiter fires 429 after repeated login attempts (per-email+IP, 3/5min), matching the monolith.
+- Forgot-password returns success without revealing account existence; reset-password rejects invalid/reused tokens (400) and accepts a valid one (200), after which the new password logs in (200) and the old one fails (401).
+- Google OAuth start → 302 to `accounts.google.com` with correct `client_id`/`redirect_uri`/`scope`/`state` + `ig_oauth_state` cookie; callback with mismatched state redirects to `FRONTEND_URL/login?error=oauth_state`.
+- CORS preflight returns `Access-Control-Allow-Origin: http://localhost:3000` + `Access-Control-Allow-Credentials: true`.
+- Unknown route → 404 JSON.
+
+**Notes / deviations:**
+- Uses `jose` for JWT (ESM-native, same HS256 as NextAuth) instead of adding `jsonwebtoken`.
+- **Bug fix:** the monolith's HIBP check hashed the password with SHA-256, but the Pwned Passwords range API only accepts SHA-1 — so breached passwords were never detected. Ported code uses `sha1()` for the breach lookup (SHA-256 is still used for reset-token hashing). Verified a known-breached password is now rejected.
+- Added env vars `BACKEND_URL` (OAuth redirect base; falls back to request host) and `COOKIE_DOMAIN` (cross-subdomain prod cookies) — not in the original §6 list.
+- `bcryptjs` is CommonJS, so it is imported as a default (`import bcrypt from "bcryptjs"`) to work under NodeNext ESM.
+- JWT sessions cannot be hard-revoked server-side; `reset-password` clears adapter sessions + caches (equivalent to prior NextAuth JWT behavior). A denylist/token-version could be added later.
+- `authMiddleware` / `optionalAuthMiddleware` are implemented but not yet attached to any route — Phase 4 wires them onto ported routers.
+- Email sending is skipped with a warning when `EMAIL_USER`/`EMAIL_PASS` are unset (dev), matching the monolith's best-effort behavior.
 
 ### Phase 4 — Port route handlers
 - Convert all 20 usable routes to Express routers (§4 mapping).
@@ -369,15 +424,15 @@ Add a short note at the top of each file: `// SHARED — keep in sync with <othe
 ## 9. Verification Checklist ("nothing broke")
 
 ### Backend
-- [ ] `npm run typecheck` + `npm run lint` pass.
-- [ ] Server boots; `GET /api/health` returns healthy (DB + Redis).
-- [ ] Prisma migrations apply cleanly (`prisma migrate deploy`).
+- [x] `npm run typecheck` + `npm run lint` pass.
+- [x] Server boots; `GET /api/health` returns healthy (DB + Redis).
+- [x] Prisma migrations apply cleanly (`prisma migrate deploy`).
 
 ### Auth
-- [ ] Signup → OTP email → verify OTP → login → session → logout.
-- [ ] Google OAuth full round-trip; user + account upserted.
-- [ ] Forgot password → reset link → reset (HIBP breach check works).
-- [ ] Protected endpoint rejects missing/invalid JWT; accepts valid cookie.
+- [x] Signup → OTP email → verify OTP → login → session → logout.
+- [ ] Google OAuth full round-trip; user + account upserted. _(start + state validation verified; full round-trip needs real Google creds)_
+- [x] Forgot password → reset link → reset (HIBP breach check works).
+- [ ] Protected endpoint rejects missing/invalid JWT; accepts valid cookie. _(middleware built; no protected route until Phase 4)_
 
 ### Features
 - [ ] Resumes: list, create, edit, per-section PATCH, delete.

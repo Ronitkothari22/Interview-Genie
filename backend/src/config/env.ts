@@ -16,6 +16,10 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
   FRONTEND_URL: z.string().url().default("http://localhost:3000"),
+  /** Public base URL of this backend, used to build OAuth redirect URIs. */
+  BACKEND_URL: z.string().url().optional(),
+  /** Cookie domain (e.g. `.yourdomain.com`) for cross-subdomain auth in prod. */
+  COOKIE_DOMAIN: z.string().optional(),
 
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   AUTH_SECRET: z.string().min(1, "AUTH_SECRET is required"),
