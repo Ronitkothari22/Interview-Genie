@@ -4,7 +4,7 @@
 > independent projects at the repo root — `backend/` (TypeScript + Node.js +
 > Express) and `frontend/` (Next.js) — without breaking any existing feature.
 >
-> Status: IN PROGRESS — **Phase 4 complete** (2026-10-13)
+> Status: IN PROGRESS — **Phases 7–11 complete** (frontend scaffolded, stripped, rewired, builds green) (2026-10-14)
 > Owner: _assign_
 > Created: 2026-10-12
 
@@ -436,34 +436,86 @@ Add a short note at the top of each file: `// SHARED — keep in sync with <othe
 - Some Phase 5/6 artefacts were pulled forward because routes depend on them: `services/gemini.ts`, `services/preview.ts`, `templates/pdf/modern.tsx`, and the shared resume/api types. Phase 5/6 still cover `api-cache`, `batch-queries`, remaining `templates/{latex,email}`, and the full shared validations set.
 - AI routes could not be exercised end-to-end here (`GOOGLE_GEMINI_API` unset); they correctly 500 with the same messages as the monolith when the key is absent.
 
-### Phase 5 — Port services/lib
-- `email.ts` (nodemailer), `gemini.ts`, `password-reset.ts`, `user-cache`, `auth-cache`, `api-cache`, `batch-queries`, `rate-limit`.
-- Redis: keep in-memory store (single-instance) or swap to `ioredis` (documented limitation).
-- Move React-PDF templates into `src/templates/pdf/`; JSON/preview template generator into `src/services/preview.ts`.
+### Phase 5 — Port services/lib — COMPLETED (2026-10-14)
+- [x] Port `email.ts`, `gemini.ts`, `password-reset.ts`, `user-cache`, `auth-cache`, `api-cache`, `batch-queries`, `rate-limit`.
+- [x] Redis: keep in-memory store (single-instance); `ioredis` swap documented as a limitation (§10).
+- [x] Move React-PDF templates into `src/templates/pdf/`; JSON/preview template generator into `src/services/preview.ts`.
 
-### Phase 6 — Backend shared
-- Create `src/shared/` with validations + types.
+**What was done (this phase):**
 
-### Phase 7 — Scaffold `frontend/`
-- Copy pages/components/hooks/providers/styles/public and config files.
-- Install frontend deps only (React, Next, Radix, Tailwind, React Query, etc.).
+| Path | Purpose |
+|---|---|
+| `backend/src/lib/api-cache.ts` | Ported from `src/lib/api-cache.ts`: re-exports `cache`/`revalidateTag`, `createCachedResponse` (Next `Response` → Express `res`), and cached `getUserData` |
+| `backend/src/lib/batch-queries.ts` | Ported from `src/lib/batch-queries.ts`: `getDashboardData`, `getUserStatistics`, `getBatchedResumeAnalyses`, `getBatchedPracticeSessions`, `invalidateUserCaches` (imports unified to `config/prisma` + `lib/redis`) |
 
-### Phase 8 — Strip backend concerns from frontend
-- Delete `frontend/src/app/api/**`, `frontend/src/server/**`, `frontend/prisma/**`.
-- Remove Prisma, NextAuth, nodemailer, bcryptjs, Gemini SDK, React-PDF from frontend deps.
+The remaining services listed for this phase (`email.ts`, `gemini.ts`, `password-reset.ts`, `user-cache`, `auth-cache`, `rate-limit`, in-memory Redis, React-PDF templates, preview generator) were already ported and verified in Phases 3–4; Phase 5 only needed to close the `api-cache` / `batch-queries` gap.
 
-### Phase 9 — Rewrite frontend data layer
-- Add `src/lib/api-client.ts` (base URL + `credentials: "include"` + error handling).
-- Replace every `fetch("/api/...")` with `apiClient`.
-- Convert server components that used DB (`src/app/page.tsx`, `(dashboard)/layout.tsx`, `recent-interviews.tsx`, etc.) to fetch backend, forwarding the cookie via `next/headers`, or make them client components.
+**Verification (all passed against a throwaway Postgres 16 container on port 5433):**
+- `npm run typecheck` + `npm run lint` + `npm run build` — clean.
+- `prisma migrate deploy` — all 15 migrations applied.
+- `npm run start` boots; `GET /api/health` → 200 with `database: healthy` + `redis: healthy` (features ok).
+- Full smoke run: signup → OTP (read from DB) → verify → login (httpOnly `ig_session` cookie) → session → create/get/patch/list/delete resume → PDF download 200 `application/pdf` (valid `%PDF-` body) → statistics → practice start/ping/end → template preview 200; unauthenticated protected route 401; unknown route 404; CORS preflight returns allow-origin + credentials; logout clears session.
+- Runtime import test (temporary `scripts/verify-phase5.ts`, since removed) exercised both new modules end-to-end: `getUserData`, `getDashboardData`, `getUserStatistics`, `getBatchedResumeAnalyses`, `getBatchedPracticeSessions`, `invalidateUserCaches` — all returned correct results.
 
-### Phase 10 — Rewrite frontend auth
-- Add `AuthProvider`, `useAuth`, update login/signup/social buttons/user-nav.
-- Rewrite `src/middleware.ts` to check auth-cookie presence only.
+**Notes / deviations:**
+- `api-cache` and `batch-queries` are **not consumed by any backend route** (in the monolith they were only referenced by dead hooks/types — see §11). They are ported for parity and future use; only their types/utilities are exercised today.
+- `createCachedResponse` was adapted to Express (`res.status(...).set(...).json(...)`) instead of returning a web `Response`.
+- Monolith artefacts that are **dead and unreferenced** — `src/lib/templates/latex/**`, `src/lib/templates/pdf-generator.ts`, `src/lib/email-templates/login-attempt.ts`, and `src/lib/services/job-description.ts` — were intentionally **not** ported; they are tracked under Phase 14 (§11) cleanup.
+- The monolith's `src/lib/gemini.ts` `analyzeResume` export was unused (the `/api/resumes/generate` route has its own inline helper); the backend keeps only `services/gemini.ts#getGeminiModel`, which the ported routes use.
 
-### Phase 11 — Env files
-- Create backend/frontend `.env` + `.env.example` per §6.
-- Update `next.config.js` (remove `env.js` import); add `NEXT_PUBLIC_API_URL`.
+### Phase 6 — Backend shared — COMPLETED (2026-10-14)
+- [x] Create `src/shared/` with validations + types.
+- [x] Add `// SHARED — keep in sync with …` headers to every mirrored file (§7).
+
+**Shared surface (`backend/src/shared/`):**
+
+| Path | Source | Notes |
+|---|---|---|
+| `validations/auth.ts` | `src/lib/validations/auth.ts` | Ported in Phase 3; signup/login/verifyOTP/resend/forgot/reset schemas |
+| `validations/resume.ts` | `src/lib/validations/resume.ts` | **New this phase** — per-section schemas + `validateSection` + `isSectionComplete` |
+| `types/resume.ts` | `src/lib/types/resume.ts` + `src/types/resume.ts` | `ResumeData`, `TemplateType`, external-ATS `ResumeAnalysisResult`, plus `SectionScores`/`DetailedBreakdown`/`Improvement*`/`StoredResumeAnalysis` (added this phase) |
+| `types/api.ts` | `src/types/api.ts` | `ApiError` |
+| `types/session.ts` | new | `SessionUser` + `Session` (replaces `src/types/next.d.ts` NextAuth augmentation) |
+
+**Verification (all passed):**
+- `npm run typecheck` + `npm run lint` + `npm run build` — clean (shared files are included in `tsc`).
+- Runtime test (temporary `scripts/verify-phase6.ts`, since removed) against the shared validations — 14/14 checks passed: `validateSection` for valid/invalid/unknown sections, skills defaults, `isSectionComplete` for achievements/skills/personal edge cases, `personalSchema` empty-string optionals, `skillsSchema` requiring `technical`, and `StoredResumeAnalysis` importing via `tsc`.
+
+**Notes / deviations:**
+- `validateSection`'s `TabId` is **mirrored locally** in the shared file instead of importing `@/lib/resume-tabs` (that module carries lucide-react icons and stays frontend-only per §5).
+- The monolith's debug `console.log`s inside `isSectionComplete` were dropped; the return values are unchanged.
+- The backend resume routes keep their own inline per-section schemas (matching the monolith's `api/resumes/[id]/route.ts`, which also inlines them) rather than importing the shared validations — no behaviour change. The shared `validations/resume.ts` exists for the frontend mirror and future use.
+- `frontend/src/lib/shared/**` is now populated by the mirror (see Phase 7); the sync headers reference the backend paths.
+
+### Phase 7 — Scaffold `frontend/` — COMPLETED (2026-10-14)
+- Copied `src/`, `public/`, and config files (`next.config.js`, `tsconfig.json`, `.eslintrc.cjs`, `prettier.config.js`, `components.json`, `tailwind.config.ts`, `postcss.config.js`, `.gitignore`) into `frontend/`.
+- Wrote frontend-only `frontend/package.json` (`interview-genie-frontend`): all UI deps (Radix, React Query, framer-motion, recharts, etc.) and dev deps; **no** Prisma/NextAuth/trpc/PDF/Gemini/nodemailer/bcryptjs. `npm install` succeeded.
+- Mirrored shared code into `frontend/src/lib/shared/{types,validations}/` (from `backend/src/shared/**`, sync headers point back to backend):
+  - `types/resume.ts`, `types/api.ts`, `types/session.ts`, `validations/auth.ts`, `validations/resume.ts`.
+- Migrated all legacy imports (`@/lib/types/resume`, `@/lib/validations/*`, `@/types/*`) to `@/lib/shared/...`.
+
+### Phase 8 — Strip backend concerns from frontend — COMPLETED (2026-10-14)
+- Deleted `frontend/src/app/api/**`, `frontend/src/server/**`, `frontend/src/trpc/**`, `frontend/src/env.js`, `frontend/src/types/next.d.ts`.
+- Deleted server-only libs: `auth.ts`, `auth-cache.ts`, `db.ts`, `edge-auth.ts`, `edge-response.ts`, `email.ts`, `email-templates/`, `gemini.ts`, `password-reset.ts`, `prisma.ts`, `rate-limit.ts`, `redis.ts`, `user-cache.ts`, `api-cache.ts`, `batch-queries.ts`, `services/`, `templates/latex/`, `templates/pdf-generator.ts`, `components/resume/pdf-templates/`.
+- Deleted dead/unused: hooks `use-cache-keys.ts`, `use-dashboard-data.ts`, `use-practice-sessions.ts`, `use-resume-analyses.ts`; `components/providers.tsx`.
+
+### Phase 9 — Rewrite frontend data layer — COMPLETED (2026-10-14)
+- Added `src/lib/api-client.ts`: `API_URL` (`NEXT_PUBLIC_API_URL`), `apiFetch` (`credentials: "include"`), `apiRequest`, `ApiError`, `apiClient` helper.
+- Replaced every client `fetch("/api/...")` with `apiFetch` (auth forms, resume builder/view/optimizer, statistics, health, template preview, `use-save-resume`, `use-practice-time`) — 21 call sites.
+- Added `src/lib/ai-client.ts` (`generateResumeContent` → `POST /api/ai/generate`); editor page now imports it instead of the deleted `@/lib/gemini`.
+- DB-backed server components converted to `getServerSession()` (`src/lib/server-session.ts` forwards cookies to backend `/api/auth/session`): root `page.tsx`, `(dashboard)/layout.tsx`, dashboard `page.tsx` + `@content/page.tsx`; `@error/page.tsx` now pings `/api/auth/session`.
+- `use-practice-time.ts` rewritten to use `useAuth()` + `apiFetch` with local `PracticeSession`/`PracticeStats` types (dropped `@prisma/client`).
+
+### Phase 10 — Rewrite frontend auth — COMPLETED (2026-10-14)
+- Added `src/providers/auth-provider.tsx` (`AuthProvider`, `useAuth` with `session/user/status/signIn/signOut/refresh`); `signIn("credentials")` → `POST /api/auth/login`, `signIn("google")` → redirect to `${API_URL}/api/auth/google`, `signOut` → `POST /api/auth/logout`.
+- `src/lib/auth-utils.ts` re-exports `useAuth`; `components/providers/session-provider.tsx` wraps `AuthProvider`.
+- Updated `login-form.tsx`, `social-login-buttons.tsx`, `dashboard/user-nav.tsx`; error boundaries clear `ig_session` instead of next-auth cookies.
+- Rewrote `src/middleware.ts` to a cookie-presence route guard (`ig_session`); fixed the original `startsWith("/")` bug (now exact-match for `/`).
+
+### Phase 11 — Env files — COMPLETED (2026-10-14)
+- Added `frontend/.env` + `frontend/.env.example` with `NEXT_PUBLIC_API_URL=http://localhost:4000`.
+- `next.config.js` rewritten (removed `import "./src/env.js"`). Added `"root": true` to `frontend/.eslintrc.cjs` so ESLint no longer cascades into the root monolith config.
+- Verified: `npx tsc --noEmit` OK, `npm run lint` exit 0 (warnings only), `npm run build` succeeds (all routes dynamic).
 
 ### Phase 12 — Root housekeeping
 - Update root `.gitignore` (node_modules, .env, .next, dist, prisma artifacts).
@@ -471,7 +523,8 @@ Add a short note at the top of each file: `// SHARED — keep in sync with <othe
 - Decide the fate of the old root `src/`, root configs, and root `package.json`
   (recommend removing after verification; keep git history).
 
-### Phase 13 — Verification (see §9)
+### Phase 13 — Verification (see §9) — FRONTEND VERIFIED (2026-10-14)
+- Static checks + frontend runtime smoke pass (see §9). Remaining unchecked items need external creds (Google OAuth round-trip, live Gemini).
 
 ### Phase 14 — Optional cleanup (see §11)
 
@@ -500,15 +553,16 @@ Add a short note at the top of each file: `// SHARED — keep in sync with <othe
 - [x] Cron route — **dropped** (empty in monolith; see §11).
 
 ### Frontend
-- [ ] `npm run build` + `npm run lint` + `npm run typecheck` pass.
-- [ ] All routes load; no 500s.
-- [ ] CORS + cross-origin cookies work; session persists on refresh.
-- [ ] Middleware redirects unauthenticated users; redirects authed users away from auth pages.
-- [ ] No server-only imports in client bundles.
+- [x] `npm run build` + `npm run lint` + `npm run typecheck` pass. _(2026-10-14: tsc exit 0, lint exit 0 warnings only, build green, all routes dynamic)_
+- [x] All routes load; no 500s. _(`next start` smoke: 24 routes built; `/login`, `/signup`, `/forgot-password`, `/verify-otp` → 200)_
+- [x] CORS + cross-origin cookies work; session persists on refresh. _(preflight `Origin: localhost:3000` → 204, `allow-credentials: true`; login cookie → frontend `/dashboard` SSR 200, `/login` → 307 `/dashboard`)_
+- [x] Middleware redirects unauthenticated users; redirects authed users away from auth pages. _(`/` → 307 `/login`; `/dashboard` → 307 `/login?callbackUrl=%2Fdashboard`; authed `/login` → 307 `/dashboard`)_
+- [x] No server-only imports in client bundles.
 
 ### Static checks
-- [ ] `grep` confirms zero references to `@/server`, `@prisma/client`, `next-auth` in `frontend/`.
-- [ ] No relative `/api/...` fetches remain in `frontend/`.
+- [x] `grep` confirms zero references to `@/server`, `@prisma/client`, `next-auth` in `frontend/`.
+- [x] No relative `/api/...` fetches remain in `frontend/`. _(all replaced with `apiFetch`)_
+- [x] Client bundle inlines `http://localhost:4000` (`NEXT_PUBLIC_API_URL`) as expected.
 
 ---
 
