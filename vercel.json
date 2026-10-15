@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "src/app/api/resume-analysis/route.ts": {
-      "maxDuration": 60
-    }
-  }
-} 

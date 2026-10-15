@@ -4,7 +4,10 @@
 > independent projects at the repo root — `backend/` (TypeScript + Node.js +
 > Express) and `frontend/` (Next.js) — without breaking any existing feature.
 >
-> Status: IN PROGRESS — **Phases 7–11 complete** (frontend scaffolded, stripped, rewired, builds green) (2026-10-14)
+> Status: DONE — **Phases 1–14 complete**. The monolith is fully split into
+> standalone `backend/` (Express + TS) and `frontend/` (Next.js); the old root
+> app has been removed. Only two external-credential-gated verification items
+> remain (Google OAuth full round-trip, live Gemini) — see §9. (2026-10-15)
 > Owner: _assign_
 > Created: 2026-10-12
 
@@ -517,16 +520,49 @@ The remaining services listed for this phase (`email.ts`, `gemini.ts`, `password
 - `next.config.js` rewritten (removed `import "./src/env.js"`). Added `"root": true` to `frontend/.eslintrc.cjs` so ESLint no longer cascades into the root monolith config.
 - Verified: `npx tsc --noEmit` OK, `npm run lint` exit 0 (warnings only), `npm run build` succeeds (all routes dynamic).
 
-### Phase 12 — Root housekeeping
-- Update root `.gitignore` (node_modules, .env, .next, dist, prisma artifacts).
-- Update `README.md` with two-project setup instructions.
-- Decide the fate of the old root `src/`, root configs, and root `package.json`
-  (recommend removing after verification; keep git history).
+### Phase 12 — Root housekeeping — COMPLETED (2026-10-15)
+- [x] Rewrote root `.gitignore` for the two-project layout (recursive
+  `node_modules/`, `dist/`, `.next/`, `.env`, `*.tsbuildinfo`, prisma `*.db`,
+  `next-env.d.ts`, logs, `.vercel`, etc.; keeps `.env.example` committed).
+- [x] Rewrote `README.md` with two-project setup, architecture, env vars,
+  run instructions, and per-project scripts.
+- [x] Removed the old monolithic root app (git history retained).
 
-### Phase 13 — Verification (see §9) — FRONTEND VERIFIED (2026-10-14)
-- Static checks + frontend runtime smoke pass (see §9). Remaining unchecked items need external creds (Google OAuth round-trip, live Gemini).
+**What was done:**
 
-### Phase 14 — Optional cleanup (see §11)
+| Removed from root | Reason |
+|---|---|
+| `src/` | Entire monolith (pages + 21 API routes + `server/` + `trpc/`) now lives in `frontend/` (pages) and `backend/` (REST) |
+| `public/` | Duplicated into `frontend/public/` |
+| `scripts/` (empty), `components.json`, `next.config.js`, `tsconfig.json`, `.eslintrc.cjs`, `prettier.config.js`, `postcss.config.js`, `tailwind.config.ts` | Duplicated into `frontend/` |
+| `package.json`, `package-lock.json` | Monolith manifest; replaced by `backend/package.json` + `frontend/package.json` |
+| `vercel.json`, `.env.example` | Monolith-specific (Next.js function config + NextAuth env) |
+
+**Kept at root:** `backend/`, `frontend/`, `docs/`, `README.md`, `.gitignore`, `task.md`.
+
+**Verification (all passed):**
+- `backend`: `npm run typecheck` + `npm run lint` clean; `npm run build` → exit 0.
+- `frontend`: `npm run typecheck` clean; `npm run lint` exit 0 (warnings only); `npm run build` → exit 0 (24 routes).
+- Root now contains only the two standalone projects + docs/README/task.md.
+
+### Phase 13 — Verification (see §9) — FRONTEND + BACKEND CODE VERIFIED (2026-10-15)
+- Static checks + frontend runtime smoke pass (see §9).
+- Two items remain unchecked and are **blocked on external credentials**:
+  Google OAuth full round-trip and live Gemini AI calls (`GOOGLE_CLIENT_ID`/
+  `GOOGLE_CLIENT_SECRET`/`GOOGLE_GEMINI_API` are unset in `backend/.env`).
+
+### Phase 14 — Optional cleanup (see §11) — COMPLETED (2026-10-15)
+Resolved by removing the old root monolith in Phase 12 (all listed items were
+root-only). Verified no residue in the new projects:
+
+| Cleanup item | Result |
+|---|---|
+| tRPC scaffolding (`src/trpc/**`, `@trpc/*`, `superjson`) | Gone with root; zero `@trpc`/`superjson` refs in `backend/src` + `frontend/src` |
+| Dead hooks (`use-cache-keys`, `use-dashboard-data`, `use-practice-sessions`, `use-resume-analyses`) | Gone; not present in either project |
+| Dead files (`pdf-generator.ts`, `components/providers.tsx`, empty `cron/weekly-reset`) | Gone; not present in either project |
+| Unused deps (`zustand`, `@tabler/icons-svelte`, `svelte-motion`, `prompt-sync`, `@prisma/extension-accelerate`) | Gone with root `package.json`; not present in `backend/` or `frontend/` manifests |
+| Broken reference `/api/job-descriptions` (`lib/services/job-description.ts`) | Gone with root; zero `job-description` references in `frontend/` |
+| Duplicate `ResumeAnalysisResult` | Single definition per project (one in each `shared/` mirror — expected duplication, not drift)
 
 ---
 
@@ -596,7 +632,9 @@ Remove (after the split is verified):
 
 ## 12. Definition of Done
 
-- [ ] `backend/` runs standalone, serves all former `/api/**` functionality over REST, owns Prisma + auth + PDF + email + AI.
-- [ ] `frontend/` is a pure Next.js UI that talks to the backend via `NEXT_PUBLIC_API_URL`.
-- [ ] All items in §9 pass.
-- [ ] `task.md` updated / checked off.
+- [x] `backend/` runs standalone, serves all former `/api/**` functionality over REST, owns Prisma + auth + PDF + email + AI.
+- [x] `frontend/` is a pure Next.js UI that talks to the backend via `NEXT_PUBLIC_API_URL`.
+- [x] All items in §9 pass — except two external-credential-gated checks
+  (Google OAuth full round-trip, live Gemini), which cannot run without real
+  credentials; all code paths for them are ported and typecheck/build-clean.
+- [x] `task.md` updated / checked off.
